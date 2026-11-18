@@ -8,6 +8,16 @@
 
   A naive approach initially used for early development was to simply use Unity Netcode for GameObjects built-in NetworkTransform on each limb. This would result in position and rotations being replicated on every bone, with the additional caveat that packets would arrive unevenly, causing frequent "pose tearing". The bandwidth usage as a result was much higher due to the redundancy of sending bone positions repeatedly.
 
+# Optimized Input Polling
+  In the process of implementing client-prediction and server-reconciliation, the server needs to have a constant stream of inputs from each client to simulate the server-side logic. Inputs are sent every tick, which means that the data sent should have a minimized footprint. This implementation opted to allow for different input assets to be used, meaning that input schemes do not need to be hardcoded. If it is ever necessary to swap from the default player character to a different character with a separate control scheme, all that is needed to be done is simply assign a new input asset associated with the different character. 
+  
+  What this means for the implementation is that during initialization, every input is organized into two arrays: A directional input array, and a button input array. This categorization is needed because directional inputs need to serialize a direction, 8 bytes extra than the button inputs, which feature only two bytes for being tapped and held. These input arrays are then sorted deterministically so that both clients and the server know what input is being referenced.
+
+# Client-Prediction And Server-Reconciliation
+  The NGO (Netcode for GameObjects) library does not support client-prediction and server-reconciliation out of the box. It is more tailored for an owner-authoritative architecture, which means that clients are able to write to gameplay sensitive variables, like position, player state, etc. While Icarus Repair Crew would be a good candidate for owner-authoritative architecture due to being a cooperative and noncompetitive game, a server-authoritative architecture was a more suitable fit for the envisioned gameplay. Having a singular "truth" is a better fit for an environment with physically simulated elements, like ragdolls. 
+
+  For every entity that is not a player, positions are sent at a regular interval to clients if there is a significant update to position or entity state. Each client then interpolates from a previous verified state to the most recent verified state so as to keep movement smooth. For players however, state data is sent as usual but each client simulates their own state for responsiveness. This is only clientside, and it does not have impact on the server. The client then compares the received data to the associated local data, and corrects itself if the true state exceeds a certain margin of error. 
+
 # Data Driven Animation System
   Unity's default visual state machines were unsuitable for the requirements of Icarus Repair Crew's animations. Visual state machines are difficult to debug, and are inflexible for the purposes of something like using a variety of guns with different handling animations for each. Additionally, Netcode for GameObject's pipeline for animation does not mesh well with Unity's provided animation state machines. 
 
